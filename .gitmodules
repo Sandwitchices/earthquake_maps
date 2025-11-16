@@ -1,0 +1,3 @@
+[submodule "phivolcs-earthquake-data-scraper"]
+	path = phivolcs-earthquake-data-scraper
+	url = https://github.com/zekejulia/phivolcs-earthquake-data-scraper.git

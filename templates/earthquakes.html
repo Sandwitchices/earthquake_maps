@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Recent Earthquakes (≥ M3.0)</title>
+  <style>
+    body { font-family: "Segoe UI", Arial, sans-serif; background: #f5f6fa; margin: 20px; }
+    h1 { text-align: center; color: #273c75; }
+    table { width: 90%; margin: 20px auto; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    th, td { padding: 12px 15px; border-bottom: 1px solid #ddd; }
+    th { background-color: #273c75; color: white; }
+    tr:hover { background-color: #f1f2f6; }
+  </style>
+</head>
+<body>
+  <h1>Recent Earthquakes (≥ M3.0)</h1>
+  <table id="eq-table">
+    <thead>
+      <tr><th>Date</th><th>Time</th><th>Magnitude</th><th>Depth</th><th>Location</th></tr>
+    </thead>
+    <tbody>
+      {% for eq in earthquakes %}
+      <tr class="eq-row" data-lat="{{ eq.latitude or '' }}" data-lon="{{ eq.longitude or '' }}" data-radius="{{ eq.radius_m or '' }}">
+        <td>{{ eq.date }}</td>
+        <td>{{ eq.time }}</td>
+        <td>{{ eq.magnitude }}</td>
+        <td>{{ eq.depth }}</td>
+        <td>{{ eq.location }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Map container - appears when a row is clicked -->
+  <div id="map-container" style="width:90%; margin:20px auto; display:none;">
+    <div id="map" style="height:400px; border-radius:8px; overflow:hidden;"></div>
+    <div id="map-info" style="margin-top:8px; font-size:14px; color:#333;"></div>
+  </div>
+
+  <!-- Leaflet CSS/JS from CDN -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-sA+e2QvF0NT7fQvWmQf0vYf6s7gZkx7v+F7pJz8a6m0=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-VyQ2Yv5t4V3v6kU1QvQv0Kq4Z4i1q8n6r4m1p2Jm8gA=" crossorigin=""></script>
+
+  <script>
+    // Helper to create/center map when a row is clicked
+    let map = null;
+    let marker = null;
+    let circle = null;
+
+    function showMap(lat, lon, radius, infoHtml) {
+      const container = document.getElementById('map-container');
+      container.style.display = 'block';
+      if (!map) {
+        map = L.map('map').setView([lat, lon], 6);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+      } else {
+        map.setView([lat, lon], 6);
+      }
+
+      if (marker) { map.removeLayer(marker); marker = null; }
+      if (circle) { map.removeLayer(circle); circle = null; }
+
+      marker = L.marker([lat, lon]).addTo(map);
+      if (radius && !isNaN(radius)) {
+        circle = L.circle([lat, lon], { radius: Number(radius), color: 'red', opacity: 0.5 }).addTo(map);
+      }
+
+      document.getElementById('map-info').innerHTML = infoHtml || '';
+    }
+
+    // Attach click listeners to table rows
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('#eq-table .eq-row').forEach(function(row) {
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', function() {
+          const lat = row.getAttribute('data-lat');
+          const lon = row.getAttribute('data-lon');
+          const radius = row.getAttribute('data-radius');
+          const date = row.cells[0].innerText || '';
+          const time = row.cells[1].innerText || '';
+          const mag = row.cells[2].innerText || '';
+          const depth = row.cells[3].innerText || '';
+          const location = row.cells[4].innerText || '';
+
+          if (!lat || !lon) {
+            document.getElementById('map-container').style.display = 'block';
+            document.getElementById('map').innerHTML = '<div style="padding:20px;">Latitude/longitude not available for this record.</div>';
+            document.getElementById('map-info').innerText = `${date} ${time} — ${location} — M${mag} — depth ${depth}`;
+            return;
+          }
+
+          const infoHtml = `<strong>${location}</strong><br/>${date} ${time} — M${mag} — depth ${depth}<br/>Radius: ${radius ? (Number(radius).toLocaleString() + ' m') : 'N/A'}`;
+          showMap(Number(lat), Number(lon), radius ? Number(radius) : null, infoHtml);
+        });
+      });
+    });
+  </script>
+</body>
+</html>
