@@ -64,6 +64,64 @@
     let map = null;
     let marker = null;
     let circle = null;
+
+    // Client-side fallback place -> coordinates mapping (keeps UI responsive when server-provided coords are missing)
+    const PLACE_COORDS = {
+      "manila": [14.5995, 120.9842],
+      "quezon city": [14.6760, 121.0437],
+      "cebu": [10.3157, 123.8854],
+      "cebu city": [10.3157, 123.8854],
+      "davao": [7.1907, 125.4553],
+      "davao city": [7.1907, 125.4553],
+      "davao occidental": [6.75, 124.0],
+      "davao oriental": [8.7, 126.5],
+      "davao del sur": [6.75, 125.25],
+      "occidental mindoro": [13.1333, 120.4833],
+      "batangas": [13.7565, 121.0583],
+      "zambales": [15.1980, 119.9806],
+      "abra": [17.6495, 120.6169],
+      "ilocos sur": [17.5669, 120.3832],
+      "sarangani": [6.0590, 125.1581],
+      "batanes": [20.4470, 121.9803],
+      "palawan": [9.8349, 118.7381]
+    };
+
+    function estimateLatLonJS(locationText) {
+      if (!locationText) return null;
+      let text = ("" + locationText).trim();
+      // prefer parenthetical content
+      let candidate = null;
+      const paren = text.match(/\(([^)]+)\)/);
+      if (paren) candidate = paren[1].trim();
+      else if (/\bof\b/i.test(text)) {
+        const parts = text.split(/\bof\b/i);
+        candidate = parts[parts.length - 1].trim();
+      } else if (text.indexOf(',') !== -1) {
+        const parts = text.split(',');
+        candidate = parts[parts.length - 1].trim();
+      } else {
+        candidate = text;
+      }
+
+      const cand = candidate.toLowerCase();
+      // Direct lookup
+      if (PLACE_COORDS[cand]) return { lat: PLACE_COORDS[cand][0], lon: PLACE_COORDS[cand][1], method: 'lookup' };
+
+      // Substring match
+      for (const key in PLACE_COORDS) {
+        if (cand.indexOf(key) !== -1) return { lat: PLACE_COORDS[key][0], lon: PLACE_COORDS[key][1], method: 'match' };
+      }
+
+      // Token matching
+      const tokens = cand.split(/\W+/);
+      for (const t of tokens) {
+        if (!t) continue;
+        for (const key in PLACE_COORDS) {
+          if (key.indexOf(t) !== -1 || t.indexOf(key) !== -1) return { lat: PLACE_COORDS[key][0], lon: PLACE_COORDS[key][1], method: 'token' };
+        }
+      }
+      return null;
+    }
     function showMap(lat, lon, radius, infoHtml) {
       const container = document.getElementById('map-container');
       container.style.display = 'block';
@@ -119,17 +177,25 @@
           const mag = row.cells[2].innerText || '';
           const depth = row.cells[3].innerText || '';
           const location = row.cells[4].innerText || '';
-           if (!lat || !lon) {
-             // If no coords are available, remove any existing map instance and show a friendly message
-             if (map) { try { map.remove(); } catch(e){} map = null; marker = null; circle = null; }
-             document.getElementById('map-container').style.display = 'block';
-             document.getElementById('map').innerHTML = '<div style="padding:20px;">Latitude/longitude not available for this record.</div>';
-             document.getElementById('map-info').innerText = `${date} ${time} — ${location} — M${mag} — depth ${depth}`;
-             return;
-           }
+          if (!lat || !lon) {
+            // Try client-side estimation from the location text (city/province) so we can still show an approximate map
+            const est = estimateLatLonJS(location);
+            if (est) {
+              const approxInfo = `<strong>${location} (approx)</strong><br/>${date} ${time} — M${mag} — depth ${depth}<br/>Coordinates estimated by: ${est.method}`;
+              showMap(Number(est.lat), Number(est.lon), radius ? Number(radius) : null, approxInfo);
+              return;
+            }
 
-           const infoHtml = `<strong>${location}</strong><br/>${date} ${time} — M${mag} — depth ${depth}<br/>Radius: ${radius ? (Number(radius).toLocaleString() + ' m') : 'N/A'}`;
-           showMap(Number(lat), Number(lon), radius ? Number(radius) : null, infoHtml);
+            // If estimation fails, show a friendly message
+            if (map) { try { map.remove(); } catch(e){} map = null; marker = null; circle = null; }
+            document.getElementById('map-container').style.display = 'block';
+            document.getElementById('map').innerHTML = '<div style="padding:20px;">Latitude/longitude not available for this record.</div>';
+            document.getElementById('map-info').innerText = `${date} ${time} — ${location} — M${mag} — depth ${depth}`;
+            return;
+          }
+
+          const infoHtml = `<strong>${location}</strong><br/>${date} ${time} — M${mag} — depth ${depth}<br/>Radius: ${radius ? (Number(radius).toLocaleString() + ' m') : 'N/A'}`;
+          showMap(Number(lat), Number(lon), radius ? Number(radius) : null, infoHtml);
         });
       });
 
