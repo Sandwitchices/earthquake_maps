@@ -53,11 +53,7 @@
     <div id="map-info" style="margin-top:8px; font-size:14px; color:#333;"></div>
   </div>
 
-  <!-- Leaflet CSS/JS from CDN -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-sA+e2QvF0NT7fQvWmQf0vYf6s7gZkx7v+F7pJz8a6m0=" crossorigin=""/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-VyQ2Yv5t4V3v6kU1QvQv0Kq4Z4i1q8n6r4m1p2Jm8gA=" crossorigin=""></script>
+  <!-- Using Google Maps embed for map popups (no Leaflet required) -->
 
   <script>
     // Helper to create/center map when a row is clicked
@@ -126,40 +122,32 @@
       const container = document.getElementById('map-container');
       container.style.display = 'block';
 
-      // If a previous non-map message was inserted, clear it
+      // Clear previous content
       const mapEl = document.getElementById('map');
       mapEl.innerHTML = '';
 
-      if (!map) {
-        map = L.map('map').setView([lat, lon], 6);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19,
-          attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
+      function getZoomForRadius(r) {
+        if (!r) return 12;
+        if (r > 200000) return 6;
+        if (r > 100000) return 7;
+        if (r > 50000) return 8;
+        if (r > 20000) return 9;
+        if (r > 10000) return 10;
+        if (r > 5000) return 11;
+        return 12;
       }
 
-      // Clean previous layers
-      if (marker) { try { map.removeLayer(marker); } catch(e){} marker = null; }
-      if (circle) { try { map.removeLayer(circle); } catch(e){} circle = null; }
+      const zoom = getZoomForRadius(radius);
 
-      marker = L.marker([lat, lon]).addTo(map);
-      marker.bindPopup(infoHtml || '').openPopup();
-
-      if (radius && !isNaN(radius)) {
-        circle = L.circle([lat, lon], { radius: Number(radius), color: 'red', opacity: 0.5 }).addTo(map);
-        try {
-          // Fit the view to the circle bounds but limit the maximum zoom for a reasonable view
-          map.fitBounds(circle.getBounds(), { maxZoom: 12, padding: [20,20] });
-        } catch (e) {
-          map.setView([lat, lon], 8);
-        }
-      } else {
-        // No radius — zoom closer to the marker for clarity
-        map.setView([lat, lon], 10);
-      }
-
-      // Ensure Leaflet recalculates sizes (useful if the map container was hidden)
-      setTimeout(function() { try { map.invalidateSize(); } catch (e) {} }, 200);
+      // Create Google Maps embed iframe centered on coordinates
+      const src = `https://www.google.com/maps?q=${encodeURIComponent(lat + "," + lon)}&z=${zoom}&output=embed`;
+      const iframe = document.createElement('iframe');
+      iframe.src = src;
+      iframe.width = '100%';
+      iframe.height = '400';
+      iframe.style.border = '0';
+      iframe.loading = 'lazy';
+      mapEl.appendChild(iframe);
 
       document.getElementById('map-info').innerHTML = infoHtml || '';
     }
