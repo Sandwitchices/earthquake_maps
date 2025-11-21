@@ -156,26 +156,46 @@
 
       const zoom = getZoomForRadius(radius);
 
-      // Create Google Maps embed iframe centered on coordinates
-      const src = `https://www.google.com/maps?q=${encodeURIComponent(lat + "," + lon)}&z=${zoom}&output=embed`;
+      // Create OpenStreetMap embed iframe centered on coordinates (uses bbox + marker)
+      function getDeltaFromZoom(z) {
+        if (!z) return 0.06;
+        if (z <= 6) return 5;
+        if (z === 7) return 2;
+        if (z === 8) return 1;
+        if (z === 9) return 0.5;
+        if (z === 10) return 0.25;
+        if (z === 11) return 0.12;
+        if (z === 12) return 0.06;
+        if (z === 13) return 0.03;
+        return 0.015;
+      }
+      const delta = getDeltaFromZoom(zoom);
+      const minLat = lat - delta;
+      const minLon = lon - delta;
+      const maxLat = lat + delta;
+      const maxLon = lon + delta;
+      const bbox = `${minLon}%2C${minLat}%2C${maxLon}%2C${maxLat}`;
+      const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${encodeURIComponent(lat + ',' + lon)}`;
       const iframe = document.createElement('iframe');
       iframe.src = src;
       iframe.width = '100%';
       iframe.height = '400';
       iframe.style.border = '0';
       iframe.loading = 'lazy';
+      iframe.referrerPolicy = 'no-referrer-when-downgrade';
       // Append iframe and update status/debug information
       mapEl.appendChild(iframe);
 
       document.getElementById('map-info').innerHTML = infoHtml || '';
 
-      // Update the external 'Open in Google Maps' link for debugging/fallback
+      // Update the external 'Open in OpenStreetMap' link for debugging/fallback
       try {
         const link = document.getElementById('open-maps-link');
-        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lat + ',' + lon)}`;
+        const mapsUrl = `https://www.openstreetmap.org/?mlat=${encodeURIComponent(lat)}&mlon=${encodeURIComponent(lon)}#map=${encodeURIComponent(zoom)}/${encodeURIComponent(lat)}/${encodeURIComponent(lon)}`;
         if (link) {
           link.href = mapsUrl;
           link.style.display = 'inline-block';
+          link.innerText = 'Open in OpenStreetMap';
         }
       } catch (e) {
         console.warn('Failed to set Open in Google Maps link', e);
