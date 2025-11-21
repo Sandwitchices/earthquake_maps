@@ -77,9 +77,10 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha512-M2mQe7k2b1yq1j3k5c6v7n8p9r0s1t2u3v4w5x6y7z8a9b0c1d2e3f4g5h6i7j8k" crossorigin=""></script>
   <script>
     // Helper to create/center map when a row is clicked
-    let map = null;
-    let marker = null;
-    let circle = null;
+    // Runtime diagnostics
+    window._tileErrorCount = window._tileErrorCount || 0;
+    window._tileLoadCount = window._tileLoadCount || 0;
+    window._leafletLoaded = typeof L !== 'undefined';
 
     // Client-side fallback place -> coordinates mapping (keeps UI responsive when server-provided coords are missing)
     const PLACE_COORDS = {
@@ -167,10 +168,16 @@
         }
         // Initialize map
         window._currentMap = L.map('map', {preferCanvas: true}).setView([lat, lon], zoom);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
           attribution: '&copy; OpenStreetMap contributors'
         }).addTo(window._currentMap);
+
+        // Track tile load / error events for diagnostics
+        try {
+          tileLayer.on('tileerror', function(err) { window._tileErrorCount = (window._tileErrorCount||0) + 1; updateDebug(); });
+          tileLayer.on('tileload', function() { window._tileLoadCount = (window._tileLoadCount||0) + 1; updateDebug(); });
+        } catch(e) { console.warn('Tile event binding failed', e); }
 
         const marker = L.marker([lat, lon]).addTo(window._currentMap);
         if (radius && !isNaN(Number(radius))) {
@@ -179,6 +186,8 @@
         } else {
           window._currentMap.setView([lat, lon], zoom);
         }
+        // Invalidate size after a short delay to ensure tiles render when the container was hidden
+        setTimeout(function(){ try { if (window._currentMap) window._currentMap.invalidateSize(); } catch(e){} }, 200);
       } catch (e) {
         console.error('Leaflet map init failed', e);
         // Fallback: show a simple message inside the map container
@@ -206,11 +215,22 @@
         if (dbg) {
           dbg.style.display = 'block';
           const mapExists = !!(window._currentMap);
-          dbg.innerText = `coords: ${lat}, ${lon}\nzoom(approx): ${zoom}\nleaflet-map: ${mapExists}`;
+          dbg.innerText = `coords: ${lat}, ${lon}\nzoom(approx): ${zoom}\nleaflet-map: ${mapExists}\nleaflet-loaded: ${!!window._leafletLoaded}\ntile-loads: ${window._tileLoadCount||0}\ntile-errors: ${window._tileErrorCount||0}`;
         }
       } catch (e) {
         console.warn('Debug write failed', e);
       }
+    }
+
+    // Small helper to update debug panel outside showMap
+    function updateDebug() {
+      try {
+        const dbg = document.getElementById('debug-info');
+        if (!dbg) return;
+        dbg.style.display = 'block';
+        const mapExists = !!(window._currentMap);
+        dbg.innerText = `leaflet-loaded: ${!!window._leafletLoaded}\nleaflet-map: ${mapExists}\ntile-loads: ${window._tileLoadCount||0}\ntile-errors: ${window._tileErrorCount||0}`;
+      } catch(e) { }
     }
 
     // Call server-side reverse geocode (OpenRouteService) to get a human-readable place
@@ -228,6 +248,8 @@
 
     // Attach click listeners to table rows
     document.addEventListener('DOMContentLoaded', function() {
+      // On load, show whether Leaflet loaded
+      try { window._leafletLoaded = (typeof L !== 'undefined'); updateDebug(); } catch(e) { window._leafletLoaded = false; }
       document.querySelectorAll('#eq-table .eq-row').forEach(function(row) {
         row.style.cursor = 'pointer';
         row.addEventListener('click', function() {
