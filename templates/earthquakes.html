@@ -38,25 +38,42 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha512-sA+oVJ3gkFQ5Qq1xD2dQK0a1F6g1+Gd3Qe6xq3GJ6m3YxQeZV1sF2k1dH7fX0Yw1FZjr0mYqS6u2Q5h2Z3b2Qw==" crossorigin=""/>
 </head>
 <body>
-  <h1>Recent Earthquakes (≥ M3.0)</h1>
-  <table id="eq-table">
-    <thead>
-      <tr><th>Date</th><th>Time</th><th>Magnitude</th><th>Depth</th><th>Location</th><th>Coordinates</th></tr>
-    </thead>
-    <tbody>
-      {% for eq in earthquakes %}
-      <tr class="eq-row" data-lat="{{ eq.latitude or '' }}" data-lon="{{ eq.longitude or '' }}" data-radius="{{ eq.radius_m or '' }}">
-        <td>{{ eq.date }}</td>
-        <td>{{ eq.time }}</td>
-        <td>{{ eq.magnitude }}</td>
-        <td>{{ eq.depth }}</td>
-        <td>{{ eq.location }}</td>
-        <td>{% if eq.latitude and eq.longitude %}{{ eq.latitude }}, {{ eq.longitude }}{% else %}N/A{% endif %}</td>
-        <td><button class="show-btn" type="button">Show</button></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <!-- Main full-page map (background) -->
+  <div id="main-map" style="position:fixed; inset:0; z-index:0;"></div>
+
+  <!-- Content wrapper sits above the main map -->
+  <div id="content" style="position:relative; z-index:1000;">
+    <h1>Recent Earthquakes (≥ M3.0)</h1>
+
+    <div style="width:90%; margin:0 auto 12px; display:flex; gap:8px; align-items:center;">
+      <select id="eq-select" style="flex:1; padding:8px; border-radius:6px; border:1px solid #ccc;">
+        <option value="">-- Select an earthquake --</option>
+        {% for eq in earthquakes %}
+        <option data-lat="{{ eq.latitude or '' }}" data-lon="{{ eq.longitude or '' }}" data-radius="{{ eq.radius_m or '' }}">{{ eq.date }} {{ eq.time }} — M{{ eq.magnitude }} — {{ eq.location }}</option>
+        {% endfor %}
+      </select>
+      <button id="select-show" class="show-btn" type="button">Show</button>
+    </div>
+
+    <table id="eq-table">
+      <thead>
+        <tr><th>Date</th><th>Time</th><th>Magnitude</th><th>Depth</th><th>Location</th><th>Coordinates</th></tr>
+      </thead>
+      <tbody>
+        {% for eq in earthquakes %}
+        <tr class="eq-row" data-lat="{{ eq.latitude or '' }}" data-lon="{{ eq.longitude or '' }}" data-radius="{{ eq.radius_m or '' }}">
+          <td>{{ eq.date }}</td>
+          <td>{{ eq.time }}</td>
+          <td>{{ eq.magnitude }}</td>
+          <td>{{ eq.depth }}</td>
+          <td>{{ eq.location }}</td>
+          <td>{% if eq.latitude and eq.longitude %}{{ eq.latitude }}, {{ eq.longitude }}{% else %}N/A{% endif %}</td>
+          <td><button class="show-btn" type="button">Show</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
   <!-- Map container - appears when a row is clicked -->
   <div id="map-container" style="width:90%; margin:20px auto; display:none;">
@@ -233,6 +250,35 @@
       } catch(e) { }
     }
 
+    // Initialize the main background map and helper to show markers there
+    function initMainMap() {
+      try {
+        if (window._mainMap) return;
+        window._mainMap = L.map('main-map', {zoomControl: true, attributionControl: true}).setView([12.88, 121.77], 6);
+        const mainTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(window._mainMap);
+        try {
+          mainTiles.on && mainTiles.on('tileerror', function(){ window._mainTileErrors = (window._mainTileErrors||0)+1; updateDebug(); });
+          mainTiles.on && mainTiles.on('tileload', function(){ window._mainTileLoads = (window._mainTileLoads||0)+1; updateDebug(); });
+        } catch(e) {}
+      } catch(e) { console.error('initMainMap failed', e); }
+    }
+
+    function showOnMainMap(lat, lon, infoHtml) {
+      try {
+        initMainMap();
+        if (!window._mainMap) return;
+        if (window._mainMarker) {
+          window._mainMarker.setLatLng([lat, lon]);
+        } else {
+          window._mainMarker = L.marker([lat, lon]).addTo(window._mainMap);
+        }
+        if (infoHtml) window._mainMarker.bindPopup(infoHtml).openPopup();
+        window._mainMap.setView([lat, lon], 10, { animate: true });
+        setTimeout(function(){ try { window._mainMap.invalidateSize(); } catch(e){} }, 200);
+        updateDebug();
+      } catch(e) { console.error('showOnMainMap failed', e); }
+    }
+
     // Call server-side reverse geocode (OpenRouteService) to get a human-readable place
     function fetchReverseGeocode(lat, lon) {
       fetch(`/api/reverse_geocode?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`)
@@ -248,8 +294,25 @@
 
     // Attach click listeners to table rows
     document.addEventListener('DOMContentLoaded', function() {
-      // On load, show whether Leaflet loaded
+      // On load, show whether Leaflet loaded and initialize main map
       try { window._leafletLoaded = (typeof L !== 'undefined'); updateDebug(); } catch(e) { window._leafletLoaded = false; }
+      try { initMainMap(); } catch(e) {}
+      // dropdown show button
+      const selBtn = document.getElementById('select-show');
+      if (selBtn) {
+        selBtn.addEventListener('click', function() {
+          const sel = document.getElementById('eq-select');
+          if (!sel) return;
+          const opt = sel.options[sel.selectedIndex];
+          if (!opt || !opt.dataset) return alert('Please select an earthquake from the list.');
+          const lat = opt.dataset.lat;
+          const lon = opt.dataset.lon;
+          const infoHtml = opt.text;
+          if (!lat || !lon) return alert('Coordinates not available for the selected record.');
+          showOnMainMap(Number(lat), Number(lon), infoHtml);
+          fetchReverseGeocode(Number(lat), Number(lon));
+        });
+      }
       document.querySelectorAll('#eq-table .eq-row').forEach(function(row) {
         row.style.cursor = 'pointer';
         row.addEventListener('click', function() {
@@ -266,7 +329,7 @@
             const est = estimateLatLonJS(location);
             if (est) {
               const approxInfo = `<strong>${location} (approx)</strong><br/>${date} ${time} — M${mag} — depth ${depth}<br/>Coordinates estimated by: ${est.method}`;
-              showMap(Number(est.lat), Number(est.lon), radius ? Number(radius) : null, approxInfo);
+              showOnMainMap(Number(est.lat), Number(est.lon), approxInfo);
               fetchReverseGeocode(Number(est.lat), Number(est.lon));
               return;
             }
@@ -280,7 +343,7 @@
           }
 
           const infoHtml = `<strong>${location}</strong><br/>${date} ${time} — M${mag} — depth ${depth}<br/>Radius: ${radius ? (Number(radius).toLocaleString() + ' m') : 'N/A'}`;
-          showMap(Number(lat), Number(lon), radius ? Number(radius) : null, infoHtml);
+          showOnMainMap(Number(lat), Number(lon), infoHtml);
           fetchReverseGeocode(Number(lat), Number(lon));
         });
       });
