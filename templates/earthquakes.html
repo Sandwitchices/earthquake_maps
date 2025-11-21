@@ -153,6 +153,19 @@
       document.getElementById('map-info').innerHTML = infoHtml || '';
     }
 
+    // Call server-side reverse geocode (OpenRouteService) to get a human-readable place
+    function fetchReverseGeocode(lat, lon) {
+      fetch(`/api/reverse_geocode?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`)
+        .then(function(res){ return res.json(); })
+        .then(function(json){
+          if (json && json.status === 'success' && json.label) {
+            const el = document.getElementById('map-info');
+            el.innerHTML += `<div style="margin-top:6px;color:#555;"><strong>Place:</strong> ${json.label}</div>`;
+          }
+        })
+        .catch(function(err){ console.warn('Reverse geocode failed:', err); });
+    }
+
     // Attach click listeners to table rows
     document.addEventListener('DOMContentLoaded', function() {
       document.querySelectorAll('#eq-table .eq-row').forEach(function(row) {
@@ -172,6 +185,7 @@
             if (est) {
               const approxInfo = `<strong>${location} (approx)</strong><br/>${date} ${time} — M${mag} — depth ${depth}<br/>Coordinates estimated by: ${est.method}`;
               showMap(Number(est.lat), Number(est.lon), radius ? Number(radius) : null, approxInfo);
+              fetchReverseGeocode(Number(est.lat), Number(est.lon));
               return;
             }
 
@@ -185,6 +199,7 @@
 
           const infoHtml = `<strong>${location}</strong><br/>${date} ${time} — M${mag} — depth ${depth}<br/>Radius: ${radius ? (Number(radius).toLocaleString() + ' m') : 'N/A'}`;
           showMap(Number(lat), Number(lon), radius ? Number(radius) : null, infoHtml);
+          fetchReverseGeocode(Number(lat), Number(lon));
         });
       });
 
