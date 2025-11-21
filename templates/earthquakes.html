@@ -25,6 +25,15 @@
       font-weight: 600;
       z-index: 1000;
     }
+    .show-btn {
+      background: #273c75;
+      color: #fff;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .show-btn:hover { opacity: 0.95; }
   </style>
 </head>
 <body>
@@ -42,6 +51,7 @@
         <td>{{ eq.depth }}</td>
         <td>{{ eq.location }}</td>
         <td>{% if eq.latitude and eq.longitude %}{{ eq.latitude }}, {{ eq.longitude }}{% else %}N/A{% endif %}</td>
+        <td><button class="show-btn" type="button">Show</button></td>
       </tr>
       {% endfor %}
     </tbody>
@@ -199,6 +209,41 @@
 
           const infoHtml = `<strong>${location}</strong><br/>${date} ${time} — M${mag} — depth ${depth}<br/>Radius: ${radius ? (Number(radius).toLocaleString() + ' m') : 'N/A'}`;
           showMap(Number(lat), Number(lon), radius ? Number(radius) : null, infoHtml);
+          fetchReverseGeocode(Number(lat), Number(lon));
+        });
+      });
+
+      // Attach click listeners to 'Show' buttons (explicit action per row)
+      document.querySelectorAll('#eq-table .show-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          const row = btn.closest('.eq-row');
+          if (!row) return;
+          const lat = row.getAttribute('data-lat');
+          const lon = row.getAttribute('data-lon');
+          const radius = row.getAttribute('data-radius');
+          const date = row.cells[0].innerText || '';
+          const time = row.cells[1].innerText || '';
+          const mag = row.cells[2].innerText || '';
+          const depth = row.cells[3].innerText || '';
+          const location = row.cells[4].innerText || '';
+
+          if (!lat || !lon) {
+            const est = estimateLatLonJS(location);
+            if (est) {
+              const approxInfo = `<strong>${location} (approx)</strong><br/>${date} ${time} — M${mag} — depth ${depth}<br/>Coordinates estimated by: ${est.method}`;
+              showMap(Number(est.lat), Number(est.lon), radius ? Number(radius) : null, approxInfo);
+              fetchReverseGeocode(Number(est.lat), Number(est.lon));
+              return;
+            }
+            // show message
+            document.getElementById('map-container').style.display = 'block';
+            document.getElementById('map').innerHTML = '<div style="padding:20px;">Latitude/longitude not available for this record.</div>';
+            document.getElementById('map-info').innerText = `${date} ${time} — ${location} — M${mag} — depth ${depth}`;
+            return;
+          }
+
+          showMap(Number(lat), Number(lon), radius ? Number(radius) : null, `<strong>${location}</strong><br/>${date} ${time} — M${mag} — depth ${depth}`);
           fetchReverseGeocode(Number(lat), Number(lon));
         });
       });
