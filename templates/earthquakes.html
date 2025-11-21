@@ -66,6 +66,8 @@
       <a id="open-maps-link" href="#" target="_blank" style="display:none; color:#1e88e5; text-decoration:underline;">Open in Google Maps</a>
     </div>
   </div>
+  <!-- Debug output (visible) -->
+  <div id="debug-info" style="width:90%; margin:8px auto; background:#fff3cd; color:#856404; padding:10px; border-radius:6px; display:none; font-family:monospace; font-size:13px;"></div>
 
 
   <!-- Using Google Maps embed for map popups (no Leaflet required) -->
@@ -162,6 +164,7 @@
       iframe.height = '400';
       iframe.style.border = '0';
       iframe.loading = 'lazy';
+      // Append iframe and update status/debug information
       mapEl.appendChild(iframe);
 
       document.getElementById('map-info').innerHTML = infoHtml || '';
@@ -176,6 +179,18 @@
         }
       } catch (e) {
         console.warn('Failed to set Open in Google Maps link', e);
+      }
+
+      // Visible debug panel: show lat/lon, iframe src and whether iframe element exists
+      try {
+        const dbg = document.getElementById('debug-info');
+        if (dbg) {
+          dbg.style.display = 'block';
+          const iframeCount = mapEl.getElementsByTagName('iframe').length;
+          dbg.innerText = `coords: ${lat}, ${lon}\nzoom(approx): ${zoom}\niframe-src: ${src}\niframe-count: ${iframeCount}`;
+        }
+      } catch (e) {
+        console.warn('Debug write failed', e);
       }
     }
 
