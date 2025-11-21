@@ -276,7 +276,13 @@
           window._mainMarker = L.marker([lat, lon]).addTo(window._mainMap);
         }
         if (infoHtml) window._mainMarker.bindPopup(infoHtml).openPopup();
-        window._mainMap.setView([lat, lon], 10, { animate: true });
+        // add a 100 km highlight circle around the marker (remove previous circle first)
+        try {
+          const HIGHLIGHT_RADIUS = 100000; // meters (100 km)
+          if (window._mainCircle) { try { window._mainMap.removeLayer(window._mainCircle); } catch(e){} window._mainCircle = null; }
+          window._mainCircle = L.circle([lat, lon], { radius: HIGHLIGHT_RADIUS, color: '#ff7800', weight: 2, fillColor: '#ffb380', fillOpacity: 0.12 }).addTo(window._mainMap);
+          try { window._mainMap.fitBounds(window._mainCircle.getBounds(), { maxZoom: 10 }); } catch(e) { window._mainMap.setView([lat, lon], 10); }
+        } catch(e) { console.warn('Failed to add main highlight circle', e); }
         setTimeout(function(){ try { window._mainMap.invalidateSize(); } catch(e){} }, 200);
         updateDebug();
       } catch(e) { console.error('showOnMainMap failed', e); }
