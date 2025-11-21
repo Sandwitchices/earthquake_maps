@@ -41,8 +41,11 @@
   <!-- Main full-page map (background) -->
   <div id="main-map" style="position:fixed; inset:0; z-index:0;"></div>
 
-  <!-- Content wrapper sits above the main map -->
-  <div id="content" style="position:relative; z-index:1000;">
+  <!-- Floating toggle button to switch between map and list -->
+  <button id="toggle-list" style="position:fixed; top:12px; right:12px; z-index:1200; background:#273c75; color:#fff; border:none; padding:10px 12px; border-radius:6px; cursor:pointer;">Show List</button>
+
+  <!-- Content wrapper sits above the main map; hidden by default so the map is primary -->
+  <div id="content" style="position:relative; z-index:1000; display:none;">
     <h1>Recent Earthquakes (≥ M3.0)</h1>
 
     <div style="width:90%; margin:0 auto 12px; display:flex; gap:8px; align-items:center;">
@@ -311,6 +314,28 @@
           if (!lat || !lon) return alert('Coordinates not available for the selected record.');
           showOnMainMap(Number(lat), Number(lon), infoHtml);
           fetchReverseGeocode(Number(lat), Number(lon));
+        });
+      }
+
+      // Toggle button: switch between main map (default) and the list content
+      const toggleBtn = document.getElementById('toggle-list');
+      const content = document.getElementById('content');
+      const mainMapEl = document.getElementById('main-map');
+      function showContent() {
+        if (content) content.style.display = 'block';
+        if (mainMapEl) mainMapEl.style.display = 'none';
+        if (toggleBtn) toggleBtn.innerText = 'Show Map';
+      }
+      function showMapView() {
+        if (content) content.style.display = 'none';
+        if (mainMapEl) mainMapEl.style.display = 'block';
+        if (toggleBtn) toggleBtn.innerText = 'Show List';
+        // ensure the main map resizes correctly when brought back
+        try { if (window._mainMap) { setTimeout(function(){ window._mainMap.invalidateSize(); }, 150); } } catch(e){}
+      }
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', function() {
+          if (content && content.style.display === 'block') showMapView(); else showContent();
         });
       }
       document.querySelectorAll('#eq-table .eq-row').forEach(function(row) {
