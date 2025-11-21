@@ -200,13 +200,13 @@
         console.warn('Failed to set Open in Google Maps link', e);
       }
 
-      // Visible debug panel: show lat/lon, iframe src and whether iframe element exists
+      // Visible debug panel: show lat/lon and whether client map exists
       try {
         const dbg = document.getElementById('debug-info');
         if (dbg) {
           dbg.style.display = 'block';
-          const iframeCount = mapEl.getElementsByTagName('iframe').length;
-          dbg.innerText = `coords: ${lat}, ${lon}\nzoom(approx): ${zoom}\niframe-src: ${src}\niframe-count: ${iframeCount}`;
+          const mapExists = !!(window._currentMap);
+          dbg.innerText = `coords: ${lat}, ${lon}\nzoom(approx): ${zoom}\nleaflet-map: ${mapExists}`;
         }
       } catch (e) {
         console.warn('Debug write failed', e);
@@ -250,7 +250,7 @@
             }
 
             // If estimation fails, show a friendly message
-            if (map) { try { map.remove(); } catch(e){} map = null; marker = null; circle = null; }
+            if (window._currentMap) { try { window._currentMap.remove(); } catch(e){} window._currentMap = null; }
             document.getElementById('map-container').style.display = 'block';
             document.getElementById('map').innerHTML = '<div style="padding:20px;">Latitude/longitude not available for this record.</div>';
             document.getElementById('map-info').innerText = `${date} ${time} — ${location} — M${mag} — depth ${depth}`;
@@ -270,7 +270,7 @@
           const container = document.getElementById('map-container');
           container.style.display = 'none';
           // remove map instance so subsequent opens reinitialize cleanly
-          if (map) { try { map.remove(); } catch(e){} map = null; marker = null; circle = null; }
+            if (window._currentMap) { try { window._currentMap.remove(); } catch(e){} window._currentMap = null; }
         });
       }
     });
