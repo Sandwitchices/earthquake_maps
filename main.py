@@ -8,6 +8,7 @@ import sys
 import re
 import os
 import pandas as pd
+import requests
 app = FastAPI(title="PHIVOLCS Earthquake Viewer", version="1.0.0")
 
 # Templates directory (create templates/earthquakes.html)
@@ -382,3 +383,44 @@ async def home(request: Request):
     except Exception as e:
         print("Error in /:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/reverse_geocode")
+async def api_reverse_geocode(lat: float, lon: float):
+    """Reverse geocode a coordinate using OpenRouteService. Requires ORS_API_KEY env var.
+
+    Returns a JSON object with 'label' and 'properties' when available.
+    """
+    key = os.getenv('ORS_API_KEY')
+    if not key:
+        raise HTTPException(status_code=400, detail="ORS API key not configured. Set ORS_API_KEY environment variable.")
+
+    url = 'https://api.openrouteservice.org/geocode/reverse'
+    params = {
+        'api_key': key,
+        'point.lat': lat,
+        'point.lon': lon,
+        'size': 1
+    }
+    try:
+        resp = requests.get(url, params=params, timeout=10)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to contact ORS: {e}")
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"ORS returned {resp.status_code}: {resp.text}")
+
+    data = resp.json()
+    # Safe extraction
+    label = None
+    properties = None
+    try:
+        features = data.get('features', [])
+        if features:
+            props = features[0].get('properties', {})
+            label = props.get('label') or props.get('name') or props.get('county') or props.get('locality')
+            properties = props
+    except Exception:
+        pass
+
+    return JSONResponse({"status": "success", "label": label, "properties": properties, "raw": data})
