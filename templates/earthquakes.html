@@ -35,6 +35,7 @@
     }
     .show-btn:hover { opacity: 0.95; }
   </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha512-sA+oVJ3gkFQ5Qq1xD2dQK0a1F6g1+Gd3Qe6xq3GJ6m3YxQeZV1sF2k1dH7fX0Yw1FZjr0mYqS6u2Q5h2Z3b2Qw==" crossorigin=""/>
 </head>
 <body>
   <h1>Recent Earthquakes (≥ M3.0)</h1>
@@ -71,7 +72,9 @@
 
 
   <!-- Using Google Maps embed for map popups (no Leaflet required) -->
+  <!-- Using Leaflet (client-side) for map popups to avoid iframe embedding issues -->
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha512-M2mQe7k2b1yq1j3k5c6v7n8p9r0s1t2u3v4w5x6y7z8a9b0c1d2e3f4g5h6i7j8k" crossorigin=""></script>
   <script>
     // Helper to create/center map when a row is clicked
     let map = null;
@@ -156,35 +159,31 @@
 
       const zoom = getZoomForRadius(radius);
 
-      // Create OpenStreetMap embed iframe centered on coordinates (uses bbox + marker)
-      function getDeltaFromZoom(z) {
-        if (!z) return 0.06;
-        if (z <= 6) return 5;
-        if (z === 7) return 2;
-        if (z === 8) return 1;
-        if (z === 9) return 0.5;
-        if (z === 10) return 0.25;
-        if (z === 11) return 0.12;
-        if (z === 12) return 0.06;
-        if (z === 13) return 0.03;
-        return 0.015;
+      // Use Leaflet to render a client-side map so embedding policies don't block it
+      try {
+        if (window._currentMap) {
+          try { window._currentMap.remove(); } catch (e) { console.warn('Previous map removal failed', e); }
+          window._currentMap = null;
+        }
+        // Initialize map
+        window._currentMap = L.map('map', {preferCanvas: true}).setView([lat, lon], zoom);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(window._currentMap);
+
+        const marker = L.marker([lat, lon]).addTo(window._currentMap);
+        if (radius && !isNaN(Number(radius))) {
+          const circ = L.circle([lat, lon], { radius: Number(radius), color: '#f03', fillOpacity: 0.06 }).addTo(window._currentMap);
+          try { window._currentMap.fitBounds(circ.getBounds()); } catch(e) { window._currentMap.setView([lat, lon], zoom); }
+        } else {
+          window._currentMap.setView([lat, lon], zoom);
+        }
+      } catch (e) {
+        console.error('Leaflet map init failed', e);
+        // Fallback: show a simple message inside the map container
+        mapEl.innerHTML = '<div style="padding:20px;">Map failed to initialize. Check console for errors.</div>';
       }
-      const delta = getDeltaFromZoom(zoom);
-      const minLat = lat - delta;
-      const minLon = lon - delta;
-      const maxLat = lat + delta;
-      const maxLon = lon + delta;
-      const bbox = `${minLon}%2C${minLat}%2C${maxLon}%2C${maxLat}`;
-      const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${encodeURIComponent(lat + ',' + lon)}`;
-      const iframe = document.createElement('iframe');
-      iframe.src = src;
-      iframe.width = '100%';
-      iframe.height = '400';
-      iframe.style.border = '0';
-      iframe.loading = 'lazy';
-      iframe.referrerPolicy = 'no-referrer-when-downgrade';
-      // Append iframe and update status/debug information
-      mapEl.appendChild(iframe);
 
       document.getElementById('map-info').innerHTML = infoHtml || '';
 
